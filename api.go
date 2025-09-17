@@ -25,8 +25,8 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/healthz" , makeHTTPHandleFunc(s.handleProcessEmails))
-
+	router.HandleFunc("/process-emails" , makeHTTPHandleFunc(s.handleProcessEmails))
+	router.HandleFunc("/healthz" , makeHTTPHandleFunc(s.Health))
 
 	log.Println("JSON API server listening on " + s.listenAddr)
 
@@ -46,6 +46,13 @@ func (s *APIServer) handleProcessEmails(w http.ResponseWriter, r *http.Request) 
 	}
 	return writeJSON(w, http.StatusOK, resp)
 
+}
+
+
+func (s *APIServer) Health(w http.ResponseWriter, r *http.Request) error{
+	
+
+	return writeJSON(w, http.StatusOK, map[string]string{"health": "ok"})
 }
 
 // apiFunc is a custom type that represents an API handler function

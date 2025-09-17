@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 type Storage interface {
 	UpdateEmailStatus(ctx context.Context, id int, detail string) error
 	FetchPendingEmails(ctx context.Context, limit int) ([]*Email, error)
-
 	Close() error
 }
 
@@ -35,7 +36,6 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 
 	return &PostgresStore{db: db}, nil
 }
-
 
 // FetchPendingEmails grabs a batch and locks rows so multiple processors don't take the same rows.
 // Uses a transaction + FOR UPDATE SKIP LOCKED.
