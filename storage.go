@@ -10,7 +10,7 @@ import (
 
 type Storage interface {
 	UpdateEmailStatus(ctx context.Context, id int, detail string) error
-	FetchPendingEmails(ctx context.Context, limit int) ([]*Email, error)
+	FetchAllPendingEmails(ctx context.Context) ([]*Email, error)
 	Close() error
 }
 
@@ -37,66 +37,37 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 	return &PostgresStore{db: db}, nil
 }
 
-// FetchPendingEmails grabs a batch and locks rows so multiple processors don't take the same rows.
-// Uses a transaction + FOR UPDATE SKIP LOCKED.
-func (s *PostgresStore) FetchPendingEmails(ctx context.Context, limit int) ([]*Email, error) {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	query := `
-		SELECT id, email, status, sent_at, detail
+// FetchAllPendingEmails loads all emails with status = 'pending'
+func (s *PostgresStore) FetchAllPendingEmails(ctx context.Context) ([]*Email, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, email, status, sent_at
 		FROM emails
-		WHERE status = 'sent'
-		FOR UPDATE SKIP LOCKED
-		LIMIT $1
-	`
-	rows, err := tx.QueryContext(ctx, query, limit)
+		WHERE status = 'pending'
+	`)
 	if err != nil {
-		tx.Rollback()
 		return nil, err
 	}
 	defer rows.Close()
 
 	var emails []*Email
 	for rows.Next() {
-		var (
-			id      int
-			email   string
-			status  string
-			sentAt  sql.NullTime
-			detail  sql.NullString
-		)
-		if err := rows.Scan(&id, &email, &status, &sentAt, &detail); err != nil {
-			tx.Rollback()
+		var e Email
+		var sentAt sql.NullTime
+
+		if err := rows.Scan(&e.ID, &e.Email, &e.Status, &sentAt); err != nil {
 			return nil, err
 		}
-		var sat *time.Time
-		var det *string
+
 		if sentAt.Valid {
-			t := sentAt.Time
-			sat = &t
+			e.SentAt = &sentAt.Time
+		} else {
+			e.SentAt = nil
 		}
-		if detail.Valid {
-			d := detail.String
-			det = &d
-		}
-		e := &Email{
-			ID:     id,
-			Email:  email,
-			Status: status,
-			SentAt: sat,
-			Detail: det,
-		}
-		emails = append(emails, e)
+
+		emails = append(emails, &e)
 	}
 
-	// commit so the rows remain locked only until we've read them out
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return emails, nil
+	return emails, rows.Err()
 }
 
 // UpdateEmailStatus sets status='read', sent_at=NOW(), details = detail

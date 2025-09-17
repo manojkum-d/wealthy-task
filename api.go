@@ -25,18 +25,20 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/process-emails" , makeHTTPHandleFunc(s.handleProcessEmails))
-	router.HandleFunc("/healthz" , makeHTTPHandleFunc(s.Health))
+	router.HandleFunc("/process-emails" , makeHTTPHandleFunc(s.handleProcessEmails)).Methods("POST")
+	router.HandleFunc("/healthz" , makeHTTPHandleFunc(s.Health)).Methods("GET")
 
 	log.Println("JSON API server listening on " + s.listenAddr)
 
-	http.ListenAndServe(s.listenAddr, router)
+	if err:=http.ListenAndServe(s.listenAddr, router);err!=nil{
+		log.Fatalf("failed to start server: %v", err)
+	}
 
 }
 
 func (s *APIServer) handleProcessEmails(w http.ResponseWriter, r *http.Request) error {
 	log.Println("Processing emails...")
-	count , err := s.StartProcessing()
+	count , err := s.StartProcessingAll()
 	if err != nil{
 		return err
 	}

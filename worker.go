@@ -4,49 +4,55 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-func (s *APIServer) StartProcessing() (int, error) {
-	ctx := context.Background()
+func (s *APIServer) StartProcessingAll() (int64, error) {
+    ctx := context.Background()
 
-	//channel for emails
+    // fetch all pending emails in one query
+    emails, err := s.store.FetchAllPendingEmails(ctx)
+    if err != nil {
+        return 0, err
+    }
+    if len(emails) == 0 {
+        return 0, nil
+    }
 
-	emailch:= make(chan *Email)
-	var wg sync.WaitGroup
-	processed := 0
-	
-	for i:=0 ; i<5 ; i++{
-		wg.Add(1)
-		go func(workerID int){
-			defer wg.Done()
-			for e:=range emailch{
-				mockSendEmail(e)
+    emailCh := make(chan *Email, len(emails))
+    var wg sync.WaitGroup
+    var processed int64
 
-				if err := s.store.UpdateEmailStatus(ctx, e.ID, "Email sent Successfuly"); err != nil {
-					log.Printf("Failed to update email status for ID %d: %v", e.ID, err)
-					continue
-				}
-				processed++
-			}
-	}(i)
-		}
+    workerCount := 500 
+    for i := 0; i < workerCount; i++ {
+        wg.Add(1)
+        go func(workerID int) {
+            defer wg.Done()
+            for e := range emailCh {
+                // mock send
+                mockSendEmail(e)
 
-		emails, err := s.store.FetchPendingEmails(ctx , 100)
-		if err != nil{
-			close(emailch)
-			wg.Wait()
-			return processed, err
-		}
+                // update DB
+                if err := s.store.UpdateEmailStatus(ctx, e.ID, "Mock email sent successfully"); err != nil {
+                    log.Printf("worker %d failed update email id=%d: %v", workerID, e.ID, err)
+                    continue
+                }
+                atomic.AddInt64(&processed, 1)
+            }
+        }(i + 1)
+    }
 
-		for _,e:= range emails{
-			emailch <- e
-		}
-		//done 
-		close(emailch)
-		wg.Wait()
-	return processed, nil
+    // push all emails into channel
+    for _, e := range emails {
+        emailCh <- e
+    }
+    close(emailCh)
+
+    wg.Wait()
+    return processed, nil
 }
+
 
 func mockSendEmail (e *Email) {
 	log.Println("Sending email to:", e.Email)
