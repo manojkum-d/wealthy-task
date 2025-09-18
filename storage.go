@@ -10,7 +10,7 @@ import (
 
 type Storage interface {
 	UpdateEmailStatus(ctx context.Context, id int, detail string) error
-	FetchAllPendingEmails(ctx context.Context) ([]*Email, error)
+	FetchPendingBatch(ctx context.Context, limit, offset int) ([]*Email, error)
 	Close() error
 }
 
@@ -25,7 +25,7 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	// optional: tune connection pool here
+	
 	db.SetConnMaxLifetime(time.Minute * 10)
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(5)
@@ -37,38 +37,34 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 	return &PostgresStore{db: db}, nil
 }
 
-// FetchAllPendingEmails loads all emails with status = 'pending'
-func (s *PostgresStore) FetchAllPendingEmails(ctx context.Context) ([]*Email, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, email, status, sent_at
-		FROM emails
-		WHERE status = 'pending'
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+func (s *PostgresStore) FetchPendingBatch(ctx context.Context, limit, offset int) ([]*Email, error) {
+    rows, err := s.db.QueryContext(ctx, `
+        SELECT id, email, status, sent_at
+        FROM emails
+        WHERE status = 'pending'
+        ORDER BY id
+        LIMIT $1 OFFSET $2
+    `, limit, offset)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
 
-	var emails []*Email
-	for rows.Next() {
-		var e Email
-		var sentAt sql.NullTime
-
-		if err := rows.Scan(&e.ID, &e.Email, &e.Status, &sentAt); err != nil {
-			return nil, err
-		}
-
-		if sentAt.Valid {
-			e.SentAt = &sentAt.Time
-		} else {
-			e.SentAt = nil
-		}
-
-		emails = append(emails, &e)
-	}
-
-	return emails, rows.Err()
+    var emails []*Email
+    for rows.Next() {
+        var e Email
+        var sentAt sql.NullTime
+        if err := rows.Scan(&e.ID, &e.Email, &e.Status, &sentAt); err != nil {
+            return nil, err
+        }
+        if sentAt.Valid {
+            e.SentAt = &sentAt.Time
+        }
+        emails = append(emails, &e)
+    }
+    return emails, rows.Err()
 }
+
 
 // UpdateEmailStatus sets status='read', sent_at=NOW(), details = detail
 func (s *PostgresStore) UpdateEmailStatus(ctx context.Context, id int, detail string) error {

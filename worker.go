@@ -8,32 +8,19 @@ import (
 	"time"
 )
 
-func (s *APIServer) StartProcessingAll() (int64, error) {
+func (s *APIServer) StartProcessingStreaming() (int64, error) {
     ctx := context.Background()
-
-    // fetch all pending emails in one query
-    emails, err := s.store.FetchAllPendingEmails(ctx)
-    if err != nil {
-        return 0, err
-    }
-    if len(emails) == 0 {
-        return 0, nil
-    }
-
-    emailCh := make(chan *Email, len(emails))
+    emailCh := make(chan *Email, 1000) // buffer size small, constant
     var wg sync.WaitGroup
     var processed int64
 
-    workerCount := 500 
+    workerCount := 100
     for i := 0; i < workerCount; i++ {
         wg.Add(1)
         go func(workerID int) {
             defer wg.Done()
             for e := range emailCh {
-                // mock send
                 mockSendEmail(e)
-
-                // update DB
                 if err := s.store.UpdateEmailStatus(ctx, e.ID, "Mock email sent successfully"); err != nil {
                     log.Printf("worker %d failed update email id=%d: %v", workerID, e.ID, err)
                     continue
@@ -43,15 +30,32 @@ func (s *APIServer) StartProcessingAll() (int64, error) {
         }(i + 1)
     }
 
-    // push all emails into channel
-    for _, e := range emails {
-        emailCh <- e
-    }
-    close(emailCh)
+    // producer: stream from DB in batches
+    batchSize := 1000
+    offset := 0
+    for {
+        emails, err := s.store.FetchPendingBatch(ctx, batchSize, offset)
+        if err != nil {
+            close(emailCh)
+            wg.Wait()
+            return processed, err
+        }
+        if len(emails) == 0 {
+            break
+        }
 
+        for _, e := range emails {
+            emailCh <- e
+        }
+
+        offset += batchSize
+    }
+
+    close(emailCh)
     wg.Wait()
     return processed, nil
 }
+
 
 
 func mockSendEmail (e *Email) {

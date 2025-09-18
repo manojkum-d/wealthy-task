@@ -38,7 +38,7 @@ func (s *APIServer) Run() {
 
 func (s *APIServer) handleProcessEmails(w http.ResponseWriter, r *http.Request) error {
 	log.Println("Processing emails...")
-	count , err := s.StartProcessingAll()
+	count , err := s.StartProcessingStreaming()
 	if err != nil{
 		return err
 	}
