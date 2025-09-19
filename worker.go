@@ -5,22 +5,21 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 func (s *APIServer) StartProcessingStreaming() (int64, error) {
     ctx := context.Background()
-    emailCh := make(chan *Email, 1000) // buffer size small, constant
+    emailCh := make(chan *Email, 10) 
     var wg sync.WaitGroup
     var processed int64
 
-    workerCount := 100
+    workerCount := 5
     for i := 0; i < workerCount; i++ {
         wg.Add(1)
         go func(workerID int) {
             defer wg.Done()
             for e := range emailCh {
-                mockSendEmail(e)
+                mockSendEmail(e , s.rl)
                 if err := s.store.UpdateEmailStatus(ctx, e.ID, "Mock email sent successfully"); err != nil {
                     log.Printf("worker %d failed update email id=%d: %v", workerID, e.ID, err)
                     continue
@@ -31,7 +30,7 @@ func (s *APIServer) StartProcessingStreaming() (int64, error) {
     }
 
     // producer: stream from DB in batches
-    batchSize := 1000
+    batchSize := 10
     offset := 0
     for {
         emails, err := s.store.FetchPendingBatch(ctx, batchSize, offset)
@@ -58,10 +57,18 @@ func (s *APIServer) StartProcessingStreaming() (int64, error) {
 
 
 
-func mockSendEmail (e *Email) {
+
+func mockSendEmail (e *Email , r *RateLimit) {
+    ctx:=context.Background()
+    if err := r.check(ctx); err != nil {
+		log.Println("❌ Not sending email to", e.Email, ":", err)
+		return
+	}
+    log.Print("Rate limit passed")
+    r.check(ctx);
 	log.Println("Sending email to:", e.Email)
 
-	time.Sleep(500 * time.Millisecond)
+	// time.Sleep(500 * time.Millisecond)
 
 	log.Println("Email sent to:", e.Email)
 }

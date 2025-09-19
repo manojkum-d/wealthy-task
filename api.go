@@ -12,13 +12,15 @@ import (
 type APIServer struct {
 	listenAddr string
 	store    Storage
+	rl 		 *RateLimit
 }
 
 // NewAPIServer creates a new instance of APIServer with the given address and storage
-func NewAPIServer(listenAddr string, store Storage) *APIServer {
+func NewAPIServer(listenAddr string, store Storage, rl *RateLimit) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
+		rl:			rl,
 	}
 }
 

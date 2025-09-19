@@ -25,7 +25,7 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+	// 8 , 5,6,12,20 
 	db.SetConnMaxLifetime(time.Minute * 10)
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(5)

@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -30,7 +31,8 @@ func main() {
 	if a := os.Getenv("LISTEN_ADDR"); a != "" {
 		addr = a
 	}
-
-	srv := NewAPIServer(addr, store)
+	last:=5* time.Second
+	rl:= NewRateLimit(last , 3)
+	srv := NewAPIServer(addr, store, rl)
 	srv.Run()
 }
