@@ -44,7 +44,7 @@ func (r *RateLimit) check(ctx context.Context) error {
 		wait := r.interval - elapsed
 		r.mu.Unlock()
 
-		// 👇 Print waiting log before sleeping
+		
 		log.Printf("Waiting %v for rate limit reset...\n", wait)
 
 		select {

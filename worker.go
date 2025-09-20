@@ -65,6 +65,6 @@ func mockSendEmail(e *Email, r *RateLimit) {
 	}
 
 	log.Println("Sending email to:", e.Email)
-	time.Sleep(1 * time.Second) // simulate work
+	time.Sleep(1 * time.Second)
 	log.Println("Email sent to:", e.Email)
 }
