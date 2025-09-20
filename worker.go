@@ -14,13 +14,13 @@ func (s *APIServer) StartProcessingStreaming() (int64, error) {
 	var wg sync.WaitGroup
 	var processed int64
 
-	workerCount := 5
+	workerCount := 3
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 			for e := range emailCh {
-				mockSendEmail(e, s.rl)
+				mockSendEmail(e, s.rl , s.rrl , workerID)
 
 				if err := s.store.UpdateEmailStatus(ctx, e.ID, "Mock email sent successfully"); err != nil {
 					log.Printf("worker %d failed update email id=%d: %v", workerID, e.ID, err)
@@ -57,14 +57,20 @@ func (s *APIServer) StartProcessingStreaming() (int64, error) {
 	return processed, nil
 }
 
-func mockSendEmail(e *Email, r *RateLimit) {
+func mockSendEmail(e *Email, r *RateLimit, r2 *RedisTokenBucketLimiter, workerID int) {
 	ctx := context.Background()
-	if err := r.check(ctx); err != nil {
-		log.Println("Not sending email to", e.Email, ":", err)
+
+	start := time.Now()
+	// if err := r.check(ctx); err != nil {
+	// 	log.Printf("[Worker %d] Not sending email to %s: %v", workerID, e.Email, err)
+	// 	return
+	// }
+	if err := r2.RedisCheck(ctx); err != nil {
+		log.Printf("[Worker %d] Not sending email to %s: %v", workerID, e.Email, err)
 		return
 	}
 
-	log.Println("Sending email to:", e.Email)
-	time.Sleep(1 * time.Second)
-	log.Println("Email sent to:", e.Email)
+	log.Printf("[Worker %d] Sending email to: %s", workerID, e.Email)
+	time.Sleep(1 * time.Second) // simulate sending
+	log.Printf("[Worker %d] Email sent to: %s (took %v)", workerID, e.Email, time.Since(start))
 }

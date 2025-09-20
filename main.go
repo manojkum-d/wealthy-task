@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 )
 
@@ -26,6 +27,16 @@ func main() {
 	}
 	defer store.Close()
 
+	// Redis client
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   0,
+	})
+	defer rdb.Close()
+
+	// Redis-based rate limiter
+	rrl := NewRedisTokenBucketLimiter(rdb, "api_rate_limit", 3, 10*time.Second)
+
 	// start api server
 	addr := ":8080"
 	if a := os.Getenv("LISTEN_ADDR"); a != "" {
@@ -33,6 +44,6 @@ func main() {
 	}
 	last:=10* time.Second
 	rl:= NewRateLimit(3 , last)
-	srv := NewAPIServer(addr, store, rl)
+	srv := NewAPIServer(addr, store, rl , rrl)
 	srv.Run()
 }

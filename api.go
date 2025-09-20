@@ -13,14 +13,16 @@ type APIServer struct {
 	listenAddr string
 	store    Storage
 	rl 		 *RateLimit
+	rrl		 *RedisTokenBucketLimiter
 }
 
 // NewAPIServer creates a new instance of APIServer with the given address and storage
-func NewAPIServer(listenAddr string, store Storage, rl *RateLimit) *APIServer {
+func NewAPIServer(listenAddr string, store Storage, rl *RateLimit , rrl *RedisTokenBucketLimiter) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
 		rl:			rl,
+		rrl:			rrl,
 	}
 }
 
