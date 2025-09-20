@@ -33,16 +33,16 @@ func main() {
 		DB:   0,
 	})
 	defer rdb.Close()
-
+	
+	last:=10* time.Second
 	// Redis-based rate limiter
-	rrl := NewRedisTokenBucketLimiter(rdb, "api_rate_limit", 3, 10*time.Second)
+	rrl := NewRedisTokenBucketLimiter(rdb, "api_rate_limit", 3,last)
 
 	// start api server
 	addr := ":8080"
 	if a := os.Getenv("LISTEN_ADDR"); a != "" {
 		addr = a
 	}
-	last:=10* time.Second
 	rl:= NewRateLimit(3 , last)
 	srv := NewAPIServer(addr, store, rl , rrl)
 	srv.Run()
