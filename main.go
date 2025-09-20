@@ -31,8 +31,8 @@ func main() {
 	if a := os.Getenv("LISTEN_ADDR"); a != "" {
 		addr = a
 	}
-	last:=5* time.Second
-	rl:= NewRateLimit(last , 3)
+	last:=10* time.Second
+	rl:= NewRateLimit(3 , last)
 	srv := NewAPIServer(addr, store, rl)
 	srv.Run()
 }

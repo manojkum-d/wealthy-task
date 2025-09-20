@@ -2,25 +2,25 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"sync"
 	"time"
 )
 
 type RateLimit struct {
-	last     time.Time
-	interval time.Duration
-	maxCalls int
-	count    int
-	mu       sync.Mutex
+	mu         sync.Mutex
+	interval   time.Duration
+	maxCalls   int
+	tokens     int
+	lastRefill time.Time
 }
 
-func NewRateLimit(interval time.Duration, maxCalls int) *RateLimit {
+func NewRateLimit(maxCalls int, interval time.Duration) *RateLimit {
 	return &RateLimit{
-		last:     time.Now(),
-		interval: interval,
-		maxCalls: maxCalls,
-		count:    0,
+		interval:   interval,
+		maxCalls:   maxCalls,
+		tokens:     maxCalls,
+		lastRefill: time.Now(),
 	}
 }
 
@@ -28,24 +28,31 @@ func (r *RateLimit) check(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// stop if max calls reached
-	if r.maxCalls > 0 && r.count >= r.maxCalls {
-		return fmt.Errorf("rate limit reached: max %d calls", r.maxCalls)
-	}
+	for {
+		now := time.Now()
+		elapsed := now.Sub(r.lastRefill)
+		if elapsed >= r.interval {
+			r.tokens = r.maxCalls
+			r.lastRefill = now
+		}
 
-	timePassed := time.Since(r.last)
-	if timePassed < r.interval {
-		wait := r.interval - timePassed
-		r.mu.Unlock() // unlock while waiting
+		if r.tokens > 0 {
+			r.tokens--
+			return nil
+		}
+
+		wait := r.interval - elapsed
+		r.mu.Unlock()
+
+		// 👇 Print waiting log before sleeping
+		log.Printf("Waiting %v for rate limit reset...\n", wait)
+
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		r.mu.Lock() // re-lock
+		r.mu.Lock()
 	}
-
-	r.last = time.Now()
-	r.count++
-	return nil
 }
+
